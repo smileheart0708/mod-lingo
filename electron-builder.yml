@@ -1,4 +1,4 @@
-appId: com.electron.app
+appId: cqxx.modlingo.app
 productName: mod-lingo
 directories:
   buildResources: build
