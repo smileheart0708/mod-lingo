@@ -1,75 +1,122 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Files, Languages, Sparkles } from 'lucide-vue-next'
-import {
-  Menubar,
-  MenubarContent,
-  MenubarItem,
-  MenubarMenu,
-  MenubarSeparator,
-  MenubarShortcut,
-  MenubarTrigger
-} from '@/components/ui/menubar'
-import ThemeModeToggle from '@/components/theme/ThemeModeToggle.vue'
+import { Files, Sparkles } from 'lucide-vue-next'
+import AppTitlebar from '@/components/shell/AppTitlebar.vue'
+import type { TitlebarTab } from '@/components/shell/titlebar'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { isThemeMode, type ThemeMode } from '@/lib/theme'
-import { cn } from '@/lib/utils'
+import { useTitlebarMetrics } from '@/lib/titlebarMetrics'
 
 const THEME_STORAGE_KEY = 'mod-lingo.theme'
-
-interface MenuEntry {
-  label: string
-  shortcut?: string
-}
-
-interface MenuSection {
-  label: string
-  items: MenuEntry[]
-}
+const INITIAL_TITLEBAR_TABS: TitlebarTab[] = [
+  { id: 'workspace', label: 'Workspace', closable: false },
+  { id: 'preview', label: 'Preview', closable: true },
+  { id: 'review', label: 'Review', closable: true }
+]
+const WORKBENCH_COPY = {
+  workspace: {
+    badge: 'Workspace tab',
+    headline: 'Organize project files, language assets, and glossary inputs before translation.',
+    description:
+      'Use this surface as the primary intake area for source packs, namespace browsing, and editor-ready project setup.',
+    cards: [
+      {
+        title: 'Resource files',
+        description: 'Prepare source mod assets, language packs, and output directories here.'
+      },
+      {
+        title: 'Translation workflows',
+        description: 'Queue glossary setup, batch translation, and review lists from one place.'
+      },
+      {
+        title: 'Project notes',
+        description:
+          'Keep per-workspace requirements, terminology rules, and export targets close by.'
+      }
+    ],
+    nextStep: 'Connect this tab to real workspace discovery and file pipeline state.'
+  },
+  preview: {
+    badge: 'Preview tab',
+    headline: 'Compare source strings and translated output in a focused preview surface.',
+    description:
+      'Reserve this tab for side-by-side string preview, inline diffs, and generated pack inspection before export.',
+    cards: [
+      {
+        title: 'Preview canvas',
+        description:
+          'Render source and translated text side-by-side with future inline diff controls.'
+      },
+      {
+        title: 'Formatting checks',
+        description:
+          'Surface placeholder mismatches, overflow risk, and key coverage before publish.'
+      },
+      {
+        title: 'Export snapshot',
+        description:
+          'Show a preflight summary of the files that will ship in the generated language bundle.'
+      }
+    ],
+    nextStep: 'Replace the placeholder cards with live translation preview components.'
+  },
+  review: {
+    badge: 'Review tab',
+    headline: 'Collect translation diagnostics, QA notes, and approval-ready changes in one pass.',
+    description:
+      'Use this surface for validation queues, issue triage, and final sign-off before writing files back to disk.',
+    cards: [
+      {
+        title: 'Review queue',
+        description:
+          'List changed keys, unresolved placeholders, and items that still need human review.'
+      },
+      {
+        title: 'Status stream',
+        description:
+          'Track indexing progress, translation job output, and warnings from background tasks.'
+      },
+      {
+        title: 'Approval checklist',
+        description:
+          'Summarize blockers, touched namespaces, and export readiness for the current workspace.'
+      }
+    ],
+    nextStep: 'Wire this tab into diagnostics, comments, and acceptance actions once data exists.'
+  }
+} satisfies Record<
+  string,
+  {
+    badge: string
+    headline: string
+    description: string
+    cards: Array<{ title: string; description: string }>
+    nextStep: string
+  }
+>
 
 const platform = window.appShell.getPlatform()
+useTitlebarMetrics(platform)
 const themeMode = ref<ThemeMode>(readStoredTheme())
 const prefersDark = ref(window.matchMedia('(prefers-color-scheme: dark)').matches)
-const menuSections: MenuSection[] = [
-  {
-    label: 'File',
-    items: [
-      { label: 'Open Workspace', shortcut: 'Ctrl+O' },
-      { label: 'Import Resources', shortcut: 'Ctrl+I' },
-      { label: 'Export Bundle', shortcut: 'Ctrl+Shift+E' }
-    ]
-  },
-  {
-    label: 'Edit',
-    items: [
-      { label: 'Find in Project', shortcut: 'Ctrl+Shift+F' },
-      { label: 'Replace Across Files', shortcut: 'Ctrl+Shift+H' },
-      { label: 'Preferences', shortcut: 'Ctrl+,' }
-    ]
-  },
-  {
-    label: 'View',
-    items: [
-      { label: 'Toggle Sidebar', shortcut: 'Ctrl+B' },
-      { label: 'Toggle Preview', shortcut: 'Ctrl+Shift+P' },
-      { label: 'Command Palette', shortcut: 'Ctrl+Shift+L' }
-    ]
-  },
-  {
-    label: 'Help',
-    items: [{ label: 'Quick Start' }, { label: 'Release Notes' }, { label: 'About mod-lingo' }]
-  }
-]
-
-const titlebarInnerClass = computed(() =>
-  platform === 'darwin' ? 'app-shell__titlebar-inner--darwin' : 'app-shell__titlebar-inner--overlay'
-)
+const titlebarTabs = ref<TitlebarTab[]>([...INITIAL_TITLEBAR_TABS])
+const activeTitlebarTabId = ref<string>(INITIAL_TITLEBAR_TABS[0]?.id ?? 'workspace')
 const resolvedTheme = computed<'light' | 'dark'>(() => {
   if (themeMode.value === 'system') {
     return prefersDark.value ? 'dark' : 'light'
   }
 
   return themeMode.value
+})
+const activeTitlebarTab = computed<TitlebarTab>(() => {
+  return (
+    titlebarTabs.value.find((tab) => tab.id === activeTitlebarTabId.value) ??
+    titlebarTabs.value[0] ??
+    INITIAL_TITLEBAR_TABS[0]
+  )
+})
+const activeWorkbenchCopy = computed(() => {
+  return WORKBENCH_COPY[activeTitlebarTab.value?.id ?? 'workspace'] ?? WORKBENCH_COPY.workspace
 })
 
 let stopSystemThemeListener: () => void = () => {}
@@ -113,6 +160,47 @@ async function applyTheme(): Promise<void> {
   syncTitlebarThemeFromStyles()
 }
 
+function handleSelectTitlebarTab(tabId: string): void {
+  if (!titlebarTabs.value.some((tab) => tab.id === tabId)) {
+    return
+  }
+
+  activeTitlebarTabId.value = tabId
+}
+
+function handleCloseTitlebarTab(tabId: string): void {
+  if (titlebarTabs.value.length <= 1) {
+    return
+  }
+
+  const closingIndex = titlebarTabs.value.findIndex((tab) => tab.id === tabId)
+
+  if (closingIndex === -1) {
+    return
+  }
+
+  const closingTab = titlebarTabs.value[closingIndex]
+
+  if (!closingTab.closable) {
+    return
+  }
+
+  const remainingTabs = titlebarTabs.value.filter((tab) => tab.id !== tabId)
+
+  if (remainingTabs.length === 0) {
+    return
+  }
+
+  titlebarTabs.value = remainingTabs
+
+  if (activeTitlebarTabId.value !== tabId) {
+    return
+  }
+
+  activeTitlebarTabId.value =
+    remainingTabs[Math.max(0, closingIndex - 1)]?.id ?? remainingTabs[0].id
+}
+
 watch(
   [themeMode, prefersDark],
   () => {
@@ -134,43 +222,14 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="app-shell flex h-dvh min-h-dvh flex-col bg-background text-foreground">
-    <header class="app-shell__titlebar border-b bg-background">
-      <div
-        :class="
-          cn('app-shell__titlebar-inner flex h-full items-center gap-3 px-3', titlebarInnerClass)
-        "
-      >
-        <div class="flex min-w-0 items-center gap-2 text-sm font-semibold tracking-tight">
-          <div class="rounded-md border border-border/70 bg-muted/70 p-1.5">
-            <Languages class="size-4 text-foreground/90" />
-          </div>
-          <div class="min-w-0">
-            <p class="truncate">mod-lingo</p>
-          </div>
-        </div>
-
-        <Menubar class="app-shell__no-drag h-8 min-w-0 border-0 bg-transparent p-0 shadow-none">
-          <MenubarMenu v-for="section in menuSections" :key="section.label">
-            <MenubarTrigger class="h-7 rounded-md px-2.5 text-[13px] font-medium">
-              {{ section.label }}
-            </MenubarTrigger>
-            <MenubarContent class="min-w-56">
-              <template v-for="(item, index) in section.items" :key="item.label">
-                <MenubarItem disabled>
-                  {{ item.label }}
-                  <MenubarShortcut v-if="item.shortcut">
-                    {{ item.shortcut }}
-                  </MenubarShortcut>
-                </MenubarItem>
-                <MenubarSeparator v-if="index === section.items.length - 2" />
-              </template>
-            </MenubarContent>
-          </MenubarMenu>
-        </Menubar>
-
-        <ThemeModeToggle v-model="themeMode" class="app-shell__no-drag ml-auto" />
-      </div>
-    </header>
+    <AppTitlebar
+      v-model="themeMode"
+      :tabs="titlebarTabs"
+      :active-tab-id="activeTitlebarTabId"
+      @select-tab="handleSelectTitlebarTab"
+      @close-tab="handleCloseTitlebarTab"
+    />
+    <div aria-hidden="true" class="app-shell__divider" />
 
     <main class="min-h-0 flex-1 overflow-hidden">
       <ResizablePanelGroup direction="horizontal">
@@ -240,7 +299,7 @@ onBeforeUnmount(() => {
                 <div
                   class="rounded-full border border-border/80 bg-muted/55 px-3 py-1 text-xs font-medium text-muted-foreground"
                 >
-                  Editor surface
+                  {{ activeWorkbenchCopy.badge }}
                 </div>
                 <div
                   class="rounded-full border border-border/80 bg-muted/55 px-3 py-1 text-xs font-medium text-muted-foreground"
@@ -254,35 +313,31 @@ onBeforeUnmount(() => {
                   Main panel
                 </p>
                 <h1 class="mt-3 text-4xl font-semibold tracking-tight text-balance">
-                  Resizable placeholder for translation workspace, preview, and review tools.
+                  {{ activeWorkbenchCopy.headline }}
                 </h1>
                 <p class="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-                  The shell now owns a custom draggable title bar, native overlay controls on
-                  Windows and Linux, and a theme model that can keep the window chrome aligned with
-                  the renderer palette.
+                  {{ activeWorkbenchCopy.description }}
                 </p>
               </div>
 
               <div class="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <div class="rounded-2xl border border-border/70 bg-background/80 p-4">
-                  <p class="text-sm font-medium">Drop zone</p>
+                <div
+                  v-for="card in activeWorkbenchCopy.cards"
+                  :key="card.title"
+                  class="rounded-2xl border border-border/70 bg-background/80 p-4"
+                >
+                  <p class="text-sm font-medium">{{ card.title }}</p>
                   <p class="mt-2 text-sm text-muted-foreground">
-                    Reserve this area for language assets, glossary import, or project bootstrap.
-                  </p>
-                </div>
-                <div class="rounded-2xl border border-border/70 bg-background/80 p-4">
-                  <p class="text-sm font-medium">Preview canvas</p>
-                  <p class="mt-2 text-sm text-muted-foreground">
-                    Future side-by-side source and translated text can reuse the current panel
-                    split.
+                    {{ card.description }}
                   </p>
                 </div>
                 <div
                   class="rounded-2xl border border-border/70 bg-background/80 p-4 md:col-span-2 xl:col-span-1"
                 >
-                  <p class="text-sm font-medium">Status stream</p>
+                  <p class="text-sm font-medium">{{ activeTitlebarTab.label }} status</p>
                   <p class="mt-2 text-sm text-muted-foreground">
-                    Surface indexing progress, diagnostics, and translation job results here.
+                    Keep diagnostics, background job output, and current tab state visible while the
+                    rest of the workspace grows around this shell.
                   </p>
                 </div>
               </div>
@@ -292,8 +347,7 @@ onBeforeUnmount(() => {
               >
                 <p class="text-sm font-medium">Next implementation slice</p>
                 <p class="mt-1 text-sm text-muted-foreground">
-                  Replace this placeholder with actual workspace modules once the data model and
-                  file pipeline are ready.
+                  {{ activeWorkbenchCopy.nextStep }}
                 </p>
               </div>
             </div>
@@ -305,21 +359,9 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.app-shell__titlebar {
-  height: var(--titlebar-height);
-  user-select: none;
-  -webkit-app-region: drag;
-}
-
-.app-shell__titlebar-inner--darwin {
-  padding-left: calc(var(--traffic-light-safe-area) + 0.75rem);
-}
-
-.app-shell__titlebar-inner--overlay {
-  padding-right: calc(var(--window-controls-width) + 0.75rem);
-}
-
-.app-shell__no-drag {
-  -webkit-app-region: no-drag;
+.app-shell__divider {
+  flex: none;
+  height: 1px;
+  background: var(--titlebar-border-color);
 }
 </style>

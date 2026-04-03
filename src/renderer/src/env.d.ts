@@ -14,6 +14,17 @@ interface AppShellSystemThemePayload {
 }
 
 declare global {
+  interface WindowControlsOverlay {
+    readonly visible: boolean
+    getTitlebarAreaRect(): DOMRect
+    addEventListener(type: 'geometrychange', listener: () => void): void
+    removeEventListener(type: 'geometrychange', listener: () => void): void
+  }
+
+  interface Navigator {
+    windowControlsOverlay?: WindowControlsOverlay
+  }
+
   interface Window {
     appShell: {
       getPlatform(): 'win32' | 'darwin' | 'linux'

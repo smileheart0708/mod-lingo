@@ -41,8 +41,23 @@
   --titlebar-overlay-color: #ffffff;
   --titlebar-overlay-symbol-color: #0a0a0a;
   --titlebar-border-color: color-mix(in srgb, var(--border) 88%, transparent);
-  --traffic-light-safe-area: 76px;
-  --window-controls-width: env(titlebar-area-width, 138px);
+  --titlebar-safe-left: 0px;
+  --titlebar-safe-right: 150px;
+  --titlebar-zone-gap: 8px;
+  --titlebar-tab-height: 30px;
+  --titlebar-tab-radius: 10px;
+  --titlebar-actions-gap: 10px;
+}
+
+html[data-platform='darwin'] {
+  --titlebar-safe-left: 76px;
+  --titlebar-safe-right: 0px;
+}
+
+html[data-platform='win32'],
+html[data-platform='linux'] {
+  --titlebar-safe-left: 0px;
+  --titlebar-safe-right: 150px;
 }
 
 .dark {
@@ -81,6 +96,10 @@
   --titlebar-overlay-color: #0a0a0a;
   --titlebar-overlay-symbol-color: #fafafa;
   --titlebar-border-color: color-mix(in srgb, var(--border) 76%, transparent);
+}
+
+.app-shell__no-drag {
+  -webkit-app-region: no-drag;
 }
 
 @theme inline {
