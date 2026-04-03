@@ -1,5 +1,7 @@
 /// <reference types="vite/client" />
 
+import type { WorkspaceState } from '../../shared/workspace'
+
 type ThemeMode = 'system' | 'light' | 'dark'
 
 interface AppShellTitlebarThemePayload {
@@ -31,6 +33,9 @@ declare global {
       setThemeMode(mode: ThemeMode): void
       syncTitlebarTheme(payload: AppShellTitlebarThemePayload): void
       onSystemThemeChange(callback: (payload: AppShellSystemThemePayload) => void): () => void
+      openWorkspaceFolder(): Promise<void>
+      getCurrentWorkspace(): Promise<WorkspaceState | null>
+      onWorkspaceChanged(callback: (payload: WorkspaceState | null) => void): () => void
     }
   }
 }

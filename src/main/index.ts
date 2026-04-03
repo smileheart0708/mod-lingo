@@ -1,15 +1,20 @@
-import { app, shell, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
-import { join } from 'path'
+import { createHash } from 'node:crypto'
+import { app, shell, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from 'electron'
+import { join, normalize, parse, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
 import icon from '../../resources/icon.png?asset'
+import type { WorkspaceState } from '../shared/workspace'
 
 const APP_ID = 'cqxx.modlingo.app'
 const TITLE_BAR_HEIGHT = 40
 const IPC_CHANNELS = {
   setThemeMode: 'app-shell:set-theme-mode',
   syncTitlebarTheme: 'app-shell:sync-titlebar-theme',
-  systemThemeUpdated: 'app-shell:system-theme-updated'
+  systemThemeUpdated: 'app-shell:system-theme-updated',
+  openWorkspaceFolder: 'workspace:open-folder',
+  getCurrentWorkspace: 'workspace:get-current',
+  workspaceChanged: 'workspace:changed'
 } as const
 const DEFAULT_TITLEBAR_THEME = {
   color: '#ffffff',
@@ -18,6 +23,8 @@ const DEFAULT_TITLEBAR_THEME = {
 } as const
 
 let autoUpdaterInitialized = false
+const workspaceWindows = new Map<string, BrowserWindow>()
+const windowWorkspaces = new Map<number, WorkspaceState>()
 
 type ThemeMode = 'system' | 'light' | 'dark'
 
@@ -70,6 +77,98 @@ function syncWindowTitlebar(window: BrowserWindow, payload: TitlebarThemePayload
   }
 
   window.setTitleBarOverlay(payload)
+}
+
+function normalizeWorkspacePath(workspacePath: string): string {
+  const normalizedPath = normalize(resolve(workspacePath))
+  const root = parse(normalizedPath).root
+
+  if (normalizedPath === root) {
+    return normalizedPath
+  }
+
+  return normalizedPath.replace(/[\\/]+$/, '')
+}
+
+function normalizeWorkspacePathForKey(workspacePath: string): string {
+  const normalizedPath = normalizeWorkspacePath(workspacePath)
+
+  return process.platform === 'win32' ? normalizedPath.toLowerCase() : normalizedPath
+}
+
+function buildWorkspaceSegments(workspacePath: string): string[] {
+  const normalizedPath = normalizeWorkspacePath(workspacePath)
+  const { root } = parse(normalizedPath)
+  const rootLabel = root ? root.replace(/[\\/]+$/, '') || root : ''
+  const tail = normalizedPath.slice(root.length).split(/[\\/]+/).filter(Boolean)
+
+  return rootLabel ? [rootLabel, ...tail] : tail
+}
+
+function createWorkspaceState(workspacePath: string): WorkspaceState {
+  const normalizedPath = normalizeWorkspacePath(workspacePath)
+  const workspaceKey = createHash('sha256')
+    .update(normalizeWorkspacePathForKey(normalizedPath))
+    .digest('hex')
+
+  return {
+    workspaceKey,
+    workspacePath: normalizedPath,
+    segments: buildWorkspaceSegments(normalizedPath)
+  }
+}
+
+function getWorkspaceTitle(workspace: WorkspaceState | null): string {
+  const workspaceName = workspace?.segments.at(-1)
+
+  return workspaceName ? `mod-lingo - ${workspaceName}` : 'mod-lingo'
+}
+
+function getWindowWorkspace(window: BrowserWindow): WorkspaceState | null {
+  return windowWorkspaces.get(window.id) ?? null
+}
+
+function emitWorkspaceChanged(window: BrowserWindow): void {
+  if (window.isDestroyed()) {
+    return
+  }
+
+  window.webContents.send(IPC_CHANNELS.workspaceChanged, getWindowWorkspace(window))
+}
+
+function clearWorkspaceForWindow(window: BrowserWindow): void {
+  const currentWorkspace = windowWorkspaces.get(window.id)
+
+  if (!currentWorkspace) {
+    return
+  }
+
+  const registeredWindow = workspaceWindows.get(currentWorkspace.workspaceKey)
+
+  if (registeredWindow?.id === window.id) {
+    workspaceWindows.delete(currentWorkspace.workspaceKey)
+  }
+
+  windowWorkspaces.delete(window.id)
+}
+
+function setWorkspaceForWindow(window: BrowserWindow, workspace: WorkspaceState): void {
+  clearWorkspaceForWindow(window)
+  windowWorkspaces.set(window.id, workspace)
+  workspaceWindows.set(workspace.workspaceKey, window)
+  window.setTitle(getWorkspaceTitle(workspace))
+
+  if (!window.webContents.isLoadingMainFrame()) {
+    emitWorkspaceChanged(window)
+  }
+}
+
+function focusWindow(window: BrowserWindow): void {
+  if (window.isMinimized()) {
+    window.restore()
+  }
+
+  window.focus()
 }
 
 function setupAutoUpdater(window: BrowserWindow): void {
@@ -140,7 +239,70 @@ function setupAutoUpdater(window: BrowserWindow): void {
   void autoUpdater.checkForUpdates()
 }
 
-function createWindow(): BrowserWindow {
+async function openWorkspaceFolderFromWindow(targetWindow?: BrowserWindow | null): Promise<void> {
+  const window = targetWindow ?? BrowserWindow.getFocusedWindow()
+
+  if (!window || window.isDestroyed()) {
+    return
+  }
+
+  const { canceled, filePaths } = await dialog.showOpenDialog(window, {
+    title: 'Open Folder',
+    properties: ['openDirectory', 'createDirectory']
+  })
+
+  if (canceled || filePaths.length === 0) {
+    return
+  }
+
+  const selectedWorkspace = createWorkspaceState(filePaths[0])
+  const currentWorkspace = getWindowWorkspace(window)
+
+  if (currentWorkspace?.workspaceKey === selectedWorkspace.workspaceKey) {
+    focusWindow(window)
+    return
+  }
+
+  const existingWindow = workspaceWindows.get(selectedWorkspace.workspaceKey)
+
+  if (existingWindow && !existingWindow.isDestroyed()) {
+    focusWindow(existingWindow)
+    return
+  }
+
+  if (!currentWorkspace) {
+    setWorkspaceForWindow(window, selectedWorkspace)
+    return
+  }
+
+  createWindow({ workspace: selectedWorkspace })
+}
+
+function installApplicationMenu(): void {
+  const menu = Menu.buildFromTemplate([
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Open Folder',
+          accelerator: 'CommandOrControl+O',
+          click: (_menuItem, browserWindow) => {
+            const targetWindow = browserWindow ? BrowserWindow.fromId(browserWindow.id) : null
+
+            void openWorkspaceFolderFromWindow(targetWindow)
+          }
+        }
+      ]
+    },
+    { role: 'editMenu' as const },
+    ...(process.platform === 'darwin' ? [{ role: 'windowMenu' as const }] : [])
+  ])
+
+  Menu.setApplicationMenu(menu)
+}
+
+function createWindow(options?: { workspace?: WorkspaceState }): BrowserWindow {
   const mainWindow = new BrowserWindow({
     width: 900,
     height: 670,
@@ -154,7 +316,8 @@ function createWindow(): BrowserWindow {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
-    }
+    },
+    title: getWorkspaceTitle(options?.workspace ?? null)
   })
 
   mainWindow.on('ready-to-show', () => {
@@ -164,6 +327,11 @@ function createWindow(): BrowserWindow {
 
   mainWindow.webContents.once('did-finish-load', () => {
     emitSystemThemeUpdated()
+    emitWorkspaceChanged(mainWindow)
+  })
+
+  mainWindow.on('closed', () => {
+    clearWorkspaceForWindow(mainWindow)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -171,10 +339,14 @@ function createWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
+  if (options?.workspace) {
+    setWorkspaceForWindow(mainWindow, options.workspace)
+  }
+
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    void mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
   return mainWindow
@@ -182,6 +354,7 @@ function createWindow(): BrowserWindow {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId(APP_ID)
+  installApplicationMenu()
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -190,6 +363,10 @@ app.whenReady().then(() => {
   ipcMain.on(IPC_CHANNELS.setThemeMode, (_event, mode: ThemeMode) => {
     if (!isThemeMode(mode)) {
       console.warn('Ignoring invalid theme mode from renderer.', mode)
+      return
+    }
+
+    if (nativeTheme.themeSource === mode) {
       return
     }
 
@@ -210,6 +387,28 @@ app.whenReady().then(() => {
     }
 
     syncWindowTitlebar(window, payload)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.openWorkspaceFolder, async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+
+    if (!window) {
+      console.warn('Unable to resolve BrowserWindow for workspace picker.')
+      return
+    }
+
+    await openWorkspaceFolderFromWindow(window)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.getCurrentWorkspace, (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+
+    if (!window) {
+      console.warn('Unable to resolve BrowserWindow for current workspace request.')
+      return null
+    }
+
+    return getWindowWorkspace(window)
   })
 
   nativeTheme.on('updated', () => {

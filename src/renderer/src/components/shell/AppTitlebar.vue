@@ -6,22 +6,11 @@ import {
   MenubarContent,
   MenubarItem,
   MenubarMenu,
-  MenubarSeparator,
   MenubarShortcut,
   MenubarTrigger
 } from '@/components/ui/menubar'
 import ThemeModeToggle from '@/components/theme/ThemeModeToggle.vue'
 import type { ThemeMode } from '@/lib/theme'
-
-interface MenuEntry {
-  label: string
-  shortcut?: string
-}
-
-interface MenuSection {
-  label: string
-  items: MenuEntry[]
-}
 
 interface Props {
   modelValue?: ThemeMode
@@ -38,36 +27,11 @@ const emits = defineEmits<{
 const platform = window.appShell.getPlatform()
 const themeMode = useVModel(props, 'modelValue', emits)
 const showWindowMenu = computed(() => platform !== 'darwin')
-const menuSections: MenuSection[] = [
-  {
-    label: 'File',
-    items: [
-      { label: 'Open Workspace', shortcut: 'Ctrl+O' },
-      { label: 'Import Resources', shortcut: 'Ctrl+I' },
-      { label: 'Export Bundle', shortcut: 'Ctrl+Shift+E' }
-    ]
-  },
-  {
-    label: 'Edit',
-    items: [
-      { label: 'Find in Project', shortcut: 'Ctrl+Shift+F' },
-      { label: 'Replace Across Files', shortcut: 'Ctrl+Shift+H' },
-      { label: 'Preferences', shortcut: 'Ctrl+,' }
-    ]
-  },
-  {
-    label: 'View',
-    items: [
-      { label: 'Toggle Sidebar', shortcut: 'Ctrl+B' },
-      { label: 'Toggle Preview', shortcut: 'Ctrl+Shift+P' },
-      { label: 'Command Palette', shortcut: 'Ctrl+Shift+L' }
-    ]
-  },
-  {
-    label: 'Help',
-    items: [{ label: 'Quick Start' }, { label: 'Release Notes' }, { label: 'About mod-lingo' }]
-  }
-]
+const openFolderShortcut = computed(() => (platform === 'darwin' ? '⌘O' : 'Ctrl+O'))
+
+async function handleOpenFolder(): Promise<void> {
+  await window.appShell.openWorkspaceFolder()
+}
 </script>
 
 <template>
@@ -86,20 +50,17 @@ const menuSections: MenuSection[] = [
           v-if="showWindowMenu"
           class="app-shell__no-drag app-titlebar__menubar h-8 min-w-0 border-0 bg-transparent p-0 shadow-none"
         >
-          <MenubarMenu v-for="section in menuSections" :key="section.label">
+          <MenubarMenu>
             <MenubarTrigger class="h-7 rounded-md px-2.5 text-[13px] font-medium">
-              {{ section.label }}
+              File
             </MenubarTrigger>
             <MenubarContent class="min-w-56">
-              <template v-for="(item, index) in section.items" :key="item.label">
-                <MenubarItem disabled>
-                  {{ item.label }}
-                  <MenubarShortcut v-if="item.shortcut">
-                    {{ item.shortcut }}
-                  </MenubarShortcut>
-                </MenubarItem>
-                <MenubarSeparator v-if="index === section.items.length - 2" />
-              </template>
+              <MenubarItem @select="void handleOpenFolder()">
+                Open Folder
+                <MenubarShortcut>
+                  {{ openFolderShortcut }}
+                </MenubarShortcut>
+              </MenubarItem>
             </MenubarContent>
           </MenubarMenu>
         </Menubar>

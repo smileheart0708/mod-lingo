@@ -1,39 +1,27 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Files, Sparkles } from 'lucide-vue-next'
 import AppTitlebar from '@/components/shell/AppTitlebar.vue'
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator
+} from '@/components/ui/breadcrumb'
+import { Kbd, KbdGroup } from '@/components/ui/kbd'
 import { isThemeMode, type ThemeMode } from '@/lib/theme'
 import { useTitlebarMetrics } from '@/lib/titlebarMetrics'
+import type { WorkspaceState } from '../../shared/workspace'
 
 const THEME_STORAGE_KEY = 'mod-lingo.theme'
-const WORKBENCH_COPY = {
-  badge: 'Workspace',
-  headline: 'Organize project files, language assets, and glossary inputs before translation.',
-  description:
-    'Use this surface as the primary intake area for source packs, namespace browsing, and editor-ready project setup.',
-  cards: [
-    {
-      title: 'Resource files',
-      description: 'Prepare source mod assets, language packs, and output directories here.'
-    },
-    {
-      title: 'Translation workflows',
-      description: 'Queue glossary setup, batch translation, and review lists from one place.'
-    },
-    {
-      title: 'Project notes',
-      description:
-        'Keep per-workspace requirements, terminology rules, and export targets close by.'
-    }
-  ],
-  nextStep: 'Connect this tab to real workspace discovery and file pipeline state.'
-}
 
 const platform = window.appShell.getPlatform()
 useTitlebarMetrics(platform)
 const themeMode = ref<ThemeMode>(readStoredTheme())
 const prefersDark = ref(window.matchMedia('(prefers-color-scheme: dark)').matches)
+const workspace = ref<WorkspaceState | null>(null)
+const openShortcutKeys = computed(() => (platform === 'darwin' ? ['⌘', 'O'] : ['Ctrl', 'O']))
 const resolvedTheme = computed<'light' | 'dark'>(() => {
   if (themeMode.value === 'system') {
     return prefersDark.value ? 'dark' : 'light'
@@ -43,6 +31,7 @@ const resolvedTheme = computed<'light' | 'dark'>(() => {
 })
 
 let stopSystemThemeListener: () => void = () => {}
+let stopWorkspaceListener: () => void = () => {}
 
 function readStoredTheme(): ThemeMode {
   const stored = localStorage.getItem(THEME_STORAGE_KEY)
@@ -83,6 +72,10 @@ async function applyTheme(): Promise<void> {
   syncTitlebarThemeFromStyles()
 }
 
+async function syncWorkspace(): Promise<void> {
+  workspace.value = await window.appShell.getCurrentWorkspace()
+}
+
 watch(
   [themeMode, prefersDark],
   () => {
@@ -93,12 +86,20 @@ watch(
 
 onMounted(() => {
   stopSystemThemeListener = window.appShell.onSystemThemeChange((payload) => {
+    themeMode.value = payload.themeSource
     prefersDark.value = payload.shouldUseDarkColors
   })
+
+  stopWorkspaceListener = window.appShell.onWorkspaceChanged((payload) => {
+    workspace.value = payload
+  })
+
+  void syncWorkspace()
 })
 
 onBeforeUnmount(() => {
   stopSystemThemeListener()
+  stopWorkspaceListener()
 })
 </script>
 
@@ -107,129 +108,43 @@ onBeforeUnmount(() => {
     <AppTitlebar v-model="themeMode" />
     <div aria-hidden="true" class="app-shell__divider" />
 
-    <main class="min-h-0 flex-1 overflow-hidden">
-      <ResizablePanelGroup direction="horizontal">
-        <ResizablePanel :default-size="22" :min-size="16" class="min-w-0">
-          <section class="h-full border-r bg-muted/20 p-4">
-            <div
-              class="flex h-full flex-col rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <p
-                    class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground"
-                  >
-                    Workspace
-                  </p>
-                  <h2 class="mt-2 text-lg font-semibold tracking-tight">Project navigator</h2>
-                </div>
-                <div
-                  class="rounded-full border border-border/80 bg-muted/70 px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
-                >
-                  Placeholder
-                </div>
-              </div>
+    <main class="min-h-0 flex-1 overflow-hidden p-4">
+      <section
+        class="flex h-full flex-col rounded-2xl border border-border/70 bg-background shadow-sm"
+      >
+        <Breadcrumb v-if="workspace" class="border-b border-border/70 px-4 py-3">
+          <BreadcrumbList>
+            <template v-for="(segment, index) in workspace.segments" :key="`${index}-${segment}`">
+              <BreadcrumbItem>
+                <BreadcrumbPage v-if="index === workspace.segments.length - 1">
+                  {{ segment }}
+                </BreadcrumbPage>
+                <BreadcrumbLink v-else as="span">
+                  {{ segment }}
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator v-if="index < workspace.segments.length - 1" />
+            </template>
+          </BreadcrumbList>
+        </Breadcrumb>
 
-              <div class="mt-6 space-y-3">
-                <div class="rounded-xl border border-dashed border-border/80 bg-muted/35 p-3">
-                  <div class="flex items-center gap-2 text-sm font-medium">
-                    <Files class="size-4 text-muted-foreground" />
-                    Resource files
-                  </div>
-                  <p class="mt-1 text-sm text-muted-foreground">
-                    Prepare source mod assets, language packs, and output directories here.
-                  </p>
-                </div>
-                <div class="rounded-xl border border-dashed border-border/80 bg-muted/35 p-3">
-                  <div class="flex items-center gap-2 text-sm font-medium">
-                    <Sparkles class="size-4 text-muted-foreground" />
-                    Translation workflows
-                  </div>
-                  <p class="mt-1 text-sm text-muted-foreground">
-                    Future steps can surface glossary setup, batch translation, and review queues.
-                  </p>
-                </div>
-              </div>
+        <div
+          v-if="workspace"
+          aria-label="workspace surface"
+          class="min-h-0 flex-1 rounded-b-2xl bg-background"
+        />
 
-              <div
-                class="mt-auto rounded-xl border border-border/70 bg-linear-to-br from-muted/55 via-background to-background p-4"
-              >
-                <p class="text-sm font-medium">Sidebar reserved for workspace tools.</p>
-                <p class="mt-1 text-sm text-muted-foreground">
-                  The panel sizing is already wired, so future feature panes can slot in without
-                  changing the window shell again.
-                </p>
-              </div>
-            </div>
-          </section>
-        </ResizablePanel>
-
-        <ResizableHandle />
-
-        <ResizablePanel :default-size="78" :min-size="40" class="min-w-0">
-          <section class="h-full bg-background p-5">
-            <div
-              class="flex h-full flex-col rounded-[1.4rem] border border-border/70 bg-background p-6 shadow-sm"
-            >
-              <div class="flex flex-wrap items-center gap-3">
-                <div
-                  class="rounded-full border border-border/80 bg-muted/55 px-3 py-1 text-xs font-medium text-muted-foreground"
-                >
-                  {{ WORKBENCH_COPY.badge }}
-                </div>
-                <div
-                  class="rounded-full border border-border/80 bg-muted/55 px-3 py-1 text-xs font-medium text-muted-foreground"
-                >
-                  Theme-aware title bar
-                </div>
-              </div>
-
-              <div class="mt-8 max-w-3xl">
-                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  Main panel
-                </p>
-                <h1 class="mt-3 text-4xl font-semibold tracking-tight text-balance">
-                  {{ WORKBENCH_COPY.headline }}
-                </h1>
-                <p class="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-                  {{ WORKBENCH_COPY.description }}
-                </p>
-              </div>
-
-              <div class="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <div
-                  v-for="card in WORKBENCH_COPY.cards"
-                  :key="card.title"
-                  class="rounded-2xl border border-border/70 bg-background/80 p-4"
-                >
-                  <p class="text-sm font-medium">{{ card.title }}</p>
-                  <p class="mt-2 text-sm text-muted-foreground">
-                    {{ card.description }}
-                  </p>
-                </div>
-                <div
-                  class="rounded-2xl border border-border/70 bg-background/80 p-4 md:col-span-2 xl:col-span-1"
-                >
-                  <p class="text-sm font-medium">Workspace status</p>
-                  <p class="mt-2 text-sm text-muted-foreground">
-                    Keep diagnostics, background job output, and current workspace state visible
-                    while the rest of the workspace grows around this shell.
-                  </p>
-                </div>
-              </div>
-
-              <div
-                class="mt-auto rounded-2xl border border-dashed border-border/80 bg-muted/28 p-5"
-              >
-                <p class="text-sm font-medium">Next implementation slice</p>
-                <p class="mt-1 text-sm text-muted-foreground">
-                  {{ WORKBENCH_COPY.nextStep }}
-                </p>
-              </div>
-            </div>
-          </section>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+        <div v-else class="flex min-h-0 flex-1 items-center justify-center p-6">
+          <KbdGroup
+            class="rounded-lg border border-dashed border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground"
+          >
+            <span class="mr-2">Open Folder</span>
+            <Kbd v-for="key in openShortcutKeys" :key="key">
+              {{ key }}
+            </Kbd>
+          </KbdGroup>
+        </div>
+      </section>
     </main>
   </div>
 </template>

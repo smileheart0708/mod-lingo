@@ -1,9 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { WorkspaceState } from '../shared/workspace'
 
 const IPC_CHANNELS = {
   setThemeMode: 'app-shell:set-theme-mode',
   syncTitlebarTheme: 'app-shell:sync-titlebar-theme',
-  systemThemeUpdated: 'app-shell:system-theme-updated'
+  systemThemeUpdated: 'app-shell:system-theme-updated',
+  openWorkspaceFolder: 'workspace:open-folder',
+  getCurrentWorkspace: 'workspace:get-current',
+  workspaceChanged: 'workspace:changed'
 } as const
 
 type ThemeMode = 'system' | 'light' | 'dark'
@@ -62,6 +66,23 @@ contextBridge.exposeInMainWorld('appShell', {
 
     return () => {
       ipcRenderer.off(IPC_CHANNELS.systemThemeUpdated, listener)
+    }
+  },
+  openWorkspaceFolder: async () => {
+    await ipcRenderer.invoke(IPC_CHANNELS.openWorkspaceFolder)
+  },
+  getCurrentWorkspace: () => {
+    return ipcRenderer.invoke(IPC_CHANNELS.getCurrentWorkspace) as Promise<WorkspaceState | null>
+  },
+  onWorkspaceChanged: (callback: (payload: WorkspaceState | null) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: WorkspaceState | null): void => {
+      callback(payload)
+    }
+
+    ipcRenderer.on(IPC_CHANNELS.workspaceChanged, listener)
+
+    return () => {
+      ipcRenderer.off(IPC_CHANNELS.workspaceChanged, listener)
     }
   }
 })
