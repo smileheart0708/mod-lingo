@@ -143,9 +143,9 @@ watch(menuOpen, (open) => {
     <DropdownMenu v-model:open="menuOpen">
       <DropdownMenuTrigger as-child>
         <Button
-          variant="outline"
+          variant="ghost"
           size="icon-sm"
-          class="h-8 w-8 rounded-full border-border/70 bg-background/90 shadow-xs"
+          class="h-8 w-8 rounded-full border-0 bg-transparent hover:bg-muted/50"
           :aria-label="`Theme: ${currentThemeLabel}`"
           :title="`Theme: ${currentThemeLabel}`"
           @pointerdown.capture="handlePointerDown"
