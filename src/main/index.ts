@@ -100,7 +100,10 @@ function buildWorkspaceSegments(workspacePath: string): string[] {
   const normalizedPath = normalizeWorkspacePath(workspacePath)
   const { root } = parse(normalizedPath)
   const rootLabel = root ? root.replace(/[\\/]+$/, '') || root : ''
-  const tail = normalizedPath.slice(root.length).split(/[\\/]+/).filter(Boolean)
+  const tail = normalizedPath
+    .slice(root.length)
+    .split(/[\\/]+/)
+    .filter(Boolean)
 
   return rootLabel ? [rootLabel, ...tail] : tail
 }

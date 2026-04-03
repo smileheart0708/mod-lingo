@@ -1,4 +1,4 @@
 interface:
-  display_name: "Mod Lingo shadcn-vue"
-  short_description: "Project shadcn-vue component guide"
-  default_prompt: "Use $mod-lingo-shadcn-vue to identify the right shadcn-vue component in this repo and show the correct import and composition pattern."
+  display_name: 'Mod Lingo shadcn-vue'
+  short_description: 'Project shadcn-vue component guide'
+  default_prompt: 'Use $mod-lingo-shadcn-vue to identify the right shadcn-vue component in this repo and show the correct import and composition pattern.'
