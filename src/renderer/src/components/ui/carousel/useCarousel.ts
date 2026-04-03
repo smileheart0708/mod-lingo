@@ -3,8 +3,18 @@ import { createInjectionState } from '@vueuse/core'
 import emblaCarouselVue from 'embla-carousel-vue'
 import { onMounted, ref } from 'vue'
 
+interface CarouselContext {
+  carouselRef: ReturnType<typeof emblaCarouselVue>[0]
+  carouselApi: ReturnType<typeof emblaCarouselVue>[1]
+  canScrollPrev: ReturnType<typeof ref<boolean>>
+  canScrollNext: ReturnType<typeof ref<boolean>>
+  scrollPrev: () => void
+  scrollNext: () => void
+  orientation: CarouselProps['orientation']
+}
+
 const [useProvideCarousel, useInjectCarousel] = createInjectionState(
-  ({ opts, orientation, plugins }: CarouselProps, emits: CarouselEmits) => {
+  ({ opts, orientation, plugins }: CarouselProps, emits: CarouselEmits): CarouselContext => {
     const [emblaNode, emblaApi] = emblaCarouselVue(
       {
         ...opts,
@@ -13,17 +23,17 @@ const [useProvideCarousel, useInjectCarousel] = createInjectionState(
       plugins
     )
 
-    function scrollPrev() {
+    function scrollPrev(): void {
       emblaApi.value?.scrollPrev()
     }
-    function scrollNext() {
+    function scrollNext(): void {
       emblaApi.value?.scrollNext()
     }
 
     const canScrollNext = ref(false)
     const canScrollPrev = ref(false)
 
-    function onSelect(api: CarouselApi) {
+    function onSelect(api: CarouselApi): void {
       canScrollNext.value = api?.canScrollNext() || false
       canScrollPrev.value = api?.canScrollPrev() || false
     }
@@ -50,7 +60,7 @@ const [useProvideCarousel, useInjectCarousel] = createInjectionState(
   }
 )
 
-function useCarousel() {
+function useCarousel(): CarouselContext {
   const carouselState = useInjectCarousel()
 
   if (!carouselState) throw new Error('useCarousel must be used within a <Carousel />')
