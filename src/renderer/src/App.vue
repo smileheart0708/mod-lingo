@@ -2,121 +2,44 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Files, Sparkles } from 'lucide-vue-next'
 import AppTitlebar from '@/components/shell/AppTitlebar.vue'
-import type { TitlebarTab } from '@/components/shell/titlebar'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { isThemeMode, type ThemeMode } from '@/lib/theme'
 import { useTitlebarMetrics } from '@/lib/titlebarMetrics'
 
 const THEME_STORAGE_KEY = 'mod-lingo.theme'
-const INITIAL_TITLEBAR_TABS: TitlebarTab[] = [
-  { id: 'workspace', label: 'Workspace', closable: false },
-  { id: 'preview', label: 'Preview', closable: true },
-  { id: 'review', label: 'Review', closable: true }
-]
 const WORKBENCH_COPY = {
-  workspace: {
-    badge: 'Workspace tab',
-    headline: 'Organize project files, language assets, and glossary inputs before translation.',
-    description:
-      'Use this surface as the primary intake area for source packs, namespace browsing, and editor-ready project setup.',
-    cards: [
-      {
-        title: 'Resource files',
-        description: 'Prepare source mod assets, language packs, and output directories here.'
-      },
-      {
-        title: 'Translation workflows',
-        description: 'Queue glossary setup, batch translation, and review lists from one place.'
-      },
-      {
-        title: 'Project notes',
-        description:
-          'Keep per-workspace requirements, terminology rules, and export targets close by.'
-      }
-    ],
-    nextStep: 'Connect this tab to real workspace discovery and file pipeline state.'
-  },
-  preview: {
-    badge: 'Preview tab',
-    headline: 'Compare source strings and translated output in a focused preview surface.',
-    description:
-      'Reserve this tab for side-by-side string preview, inline diffs, and generated pack inspection before export.',
-    cards: [
-      {
-        title: 'Preview canvas',
-        description:
-          'Render source and translated text side-by-side with future inline diff controls.'
-      },
-      {
-        title: 'Formatting checks',
-        description:
-          'Surface placeholder mismatches, overflow risk, and key coverage before publish.'
-      },
-      {
-        title: 'Export snapshot',
-        description:
-          'Show a preflight summary of the files that will ship in the generated language bundle.'
-      }
-    ],
-    nextStep: 'Replace the placeholder cards with live translation preview components.'
-  },
-  review: {
-    badge: 'Review tab',
-    headline: 'Collect translation diagnostics, QA notes, and approval-ready changes in one pass.',
-    description:
-      'Use this surface for validation queues, issue triage, and final sign-off before writing files back to disk.',
-    cards: [
-      {
-        title: 'Review queue',
-        description:
-          'List changed keys, unresolved placeholders, and items that still need human review.'
-      },
-      {
-        title: 'Status stream',
-        description:
-          'Track indexing progress, translation job output, and warnings from background tasks.'
-      },
-      {
-        title: 'Approval checklist',
-        description:
-          'Summarize blockers, touched namespaces, and export readiness for the current workspace.'
-      }
-    ],
-    nextStep: 'Wire this tab into diagnostics, comments, and acceptance actions once data exists.'
-  }
-} satisfies Record<
-  string,
-  {
-    badge: string
-    headline: string
-    description: string
-    cards: Array<{ title: string; description: string }>
-    nextStep: string
-  }
->
+  badge: 'Workspace',
+  headline: 'Organize project files, language assets, and glossary inputs before translation.',
+  description:
+    'Use this surface as the primary intake area for source packs, namespace browsing, and editor-ready project setup.',
+  cards: [
+    {
+      title: 'Resource files',
+      description: 'Prepare source mod assets, language packs, and output directories here.'
+    },
+    {
+      title: 'Translation workflows',
+      description: 'Queue glossary setup, batch translation, and review lists from one place.'
+    },
+    {
+      title: 'Project notes',
+      description:
+        'Keep per-workspace requirements, terminology rules, and export targets close by.'
+    }
+  ],
+  nextStep: 'Connect this tab to real workspace discovery and file pipeline state.'
+}
 
 const platform = window.appShell.getPlatform()
 useTitlebarMetrics(platform)
 const themeMode = ref<ThemeMode>(readStoredTheme())
 const prefersDark = ref(window.matchMedia('(prefers-color-scheme: dark)').matches)
-const titlebarTabs = ref<TitlebarTab[]>([...INITIAL_TITLEBAR_TABS])
-const activeTitlebarTabId = ref<string>(INITIAL_TITLEBAR_TABS[0]?.id ?? 'workspace')
 const resolvedTheme = computed<'light' | 'dark'>(() => {
   if (themeMode.value === 'system') {
     return prefersDark.value ? 'dark' : 'light'
   }
 
   return themeMode.value
-})
-const activeTitlebarTab = computed<TitlebarTab>(() => {
-  return (
-    titlebarTabs.value.find((tab) => tab.id === activeTitlebarTabId.value) ??
-    titlebarTabs.value[0] ??
-    INITIAL_TITLEBAR_TABS[0]
-  )
-})
-const activeWorkbenchCopy = computed(() => {
-  return WORKBENCH_COPY[activeTitlebarTab.value?.id ?? 'workspace'] ?? WORKBENCH_COPY.workspace
 })
 
 let stopSystemThemeListener: () => void = () => {}
@@ -160,47 +83,6 @@ async function applyTheme(): Promise<void> {
   syncTitlebarThemeFromStyles()
 }
 
-function handleSelectTitlebarTab(tabId: string): void {
-  if (!titlebarTabs.value.some((tab) => tab.id === tabId)) {
-    return
-  }
-
-  activeTitlebarTabId.value = tabId
-}
-
-function handleCloseTitlebarTab(tabId: string): void {
-  if (titlebarTabs.value.length <= 1) {
-    return
-  }
-
-  const closingIndex = titlebarTabs.value.findIndex((tab) => tab.id === tabId)
-
-  if (closingIndex === -1) {
-    return
-  }
-
-  const closingTab = titlebarTabs.value[closingIndex]
-
-  if (!closingTab.closable) {
-    return
-  }
-
-  const remainingTabs = titlebarTabs.value.filter((tab) => tab.id !== tabId)
-
-  if (remainingTabs.length === 0) {
-    return
-  }
-
-  titlebarTabs.value = remainingTabs
-
-  if (activeTitlebarTabId.value !== tabId) {
-    return
-  }
-
-  activeTitlebarTabId.value =
-    remainingTabs[Math.max(0, closingIndex - 1)]?.id ?? remainingTabs[0].id
-}
-
 watch(
   [themeMode, prefersDark],
   () => {
@@ -222,13 +104,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="app-shell flex h-dvh min-h-dvh flex-col bg-background text-foreground">
-    <AppTitlebar
-      v-model="themeMode"
-      :tabs="titlebarTabs"
-      :active-tab-id="activeTitlebarTabId"
-      @select-tab="handleSelectTitlebarTab"
-      @close-tab="handleCloseTitlebarTab"
-    />
+    <AppTitlebar v-model="themeMode" />
     <div aria-hidden="true" class="app-shell__divider" />
 
     <main class="min-h-0 flex-1 overflow-hidden">
@@ -299,7 +175,7 @@ onBeforeUnmount(() => {
                 <div
                   class="rounded-full border border-border/80 bg-muted/55 px-3 py-1 text-xs font-medium text-muted-foreground"
                 >
-                  {{ activeWorkbenchCopy.badge }}
+                  {{ WORKBENCH_COPY.badge }}
                 </div>
                 <div
                   class="rounded-full border border-border/80 bg-muted/55 px-3 py-1 text-xs font-medium text-muted-foreground"
@@ -313,16 +189,16 @@ onBeforeUnmount(() => {
                   Main panel
                 </p>
                 <h1 class="mt-3 text-4xl font-semibold tracking-tight text-balance">
-                  {{ activeWorkbenchCopy.headline }}
+                  {{ WORKBENCH_COPY.headline }}
                 </h1>
                 <p class="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-                  {{ activeWorkbenchCopy.description }}
+                  {{ WORKBENCH_COPY.description }}
                 </p>
               </div>
 
               <div class="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <div
-                  v-for="card in activeWorkbenchCopy.cards"
+                  v-for="card in WORKBENCH_COPY.cards"
                   :key="card.title"
                   class="rounded-2xl border border-border/70 bg-background/80 p-4"
                 >
@@ -334,10 +210,10 @@ onBeforeUnmount(() => {
                 <div
                   class="rounded-2xl border border-border/70 bg-background/80 p-4 md:col-span-2 xl:col-span-1"
                 >
-                  <p class="text-sm font-medium">{{ activeTitlebarTab.label }} status</p>
+                  <p class="text-sm font-medium">Workspace status</p>
                   <p class="mt-2 text-sm text-muted-foreground">
-                    Keep diagnostics, background job output, and current tab state visible while the
-                    rest of the workspace grows around this shell.
+                    Keep diagnostics, background job output, and current workspace state visible
+                    while the rest of the workspace grows around this shell.
                   </p>
                 </div>
               </div>
@@ -347,7 +223,7 @@ onBeforeUnmount(() => {
               >
                 <p class="text-sm font-medium">Next implementation slice</p>
                 <p class="mt-1 text-sm text-muted-foreground">
-                  {{ activeWorkbenchCopy.nextStep }}
+                  {{ WORKBENCH_COPY.nextStep }}
                 </p>
               </div>
             </div>
