@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Files, LaptopMinimal, Languages, MoonStar, Sparkles, SunMedium } from 'lucide-vue-next'
-import { Button } from '@/components/ui/button'
+import { Files, Languages, Sparkles } from 'lucide-vue-next'
 import {
   Menubar,
   MenubarContent,
@@ -11,11 +10,12 @@ import {
   MenubarShortcut,
   MenubarTrigger
 } from '@/components/ui/menubar'
+import ThemeModeToggle from '@/components/theme/ThemeModeToggle.vue'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { isThemeMode, type ThemeMode } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 
 const THEME_STORAGE_KEY = 'mod-lingo.theme'
-type ThemeMode = 'system' | 'light' | 'dark'
 
 interface MenuEntry {
   label: string
@@ -25,12 +25,6 @@ interface MenuEntry {
 interface MenuSection {
   label: string
   items: MenuEntry[]
-}
-
-interface ThemeOption {
-  label: string
-  value: ThemeMode
-  icon: typeof LaptopMinimal
 }
 
 const platform = window.appShell.getPlatform()
@@ -66,11 +60,6 @@ const menuSections: MenuSection[] = [
     items: [{ label: 'Quick Start' }, { label: 'Release Notes' }, { label: 'About mod-lingo' }]
   }
 ]
-const themeOptions: ThemeOption[] = [
-  { label: 'System', value: 'system', icon: LaptopMinimal },
-  { label: 'Light', value: 'light', icon: SunMedium },
-  { label: 'Dark', value: 'dark', icon: MoonStar }
-]
 
 const titlebarInnerClass = computed(() =>
   platform === 'darwin' ? 'app-shell__titlebar-inner--darwin' : 'app-shell__titlebar-inner--overlay'
@@ -88,7 +77,7 @@ let stopSystemThemeListener: () => void = () => {}
 function readStoredTheme(): ThemeMode {
   const stored = localStorage.getItem(THEME_STORAGE_KEY)
 
-  return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system'
+  return isThemeMode(stored) ? stored : 'system'
 }
 
 function syncTitlebarThemeFromStyles(): void {
@@ -179,29 +168,7 @@ onBeforeUnmount(() => {
           </MenubarMenu>
         </Menubar>
 
-        <div
-          class="app-shell__no-drag ml-auto flex items-center gap-1 rounded-lg border border-border/70 bg-muted/55 p-1"
-          role="group"
-          aria-label="Theme mode"
-        >
-          <Button
-            v-for="option in themeOptions"
-            :key="option.value"
-            variant="ghost"
-            size="sm"
-            :class="
-              cn(
-                'h-7 gap-1.5 rounded-md px-2.5 text-xs text-muted-foreground',
-                themeMode === option.value &&
-                  'bg-background text-foreground shadow-xs hover:bg-background'
-              )
-            "
-            @click="themeMode = option.value"
-          >
-            <component :is="option.icon" class="size-3.5" />
-            {{ option.label }}
-          </Button>
-        </div>
+        <ThemeModeToggle v-model="themeMode" class="app-shell__no-drag ml-auto" />
       </div>
     </header>
 
