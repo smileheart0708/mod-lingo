@@ -145,7 +145,7 @@ watch(menuOpen, (open) => {
         <Button
           variant="ghost"
           size="icon-sm"
-          class="h-8 w-8 rounded-full border-0 bg-transparent hover:bg-muted/50"
+          class="h-8 w-8 rounded-full"
           :aria-label="`Theme: ${currentThemeLabel}`"
           :title="`Theme: ${currentThemeLabel}`"
           @pointerdown.capture="handlePointerDown"
@@ -159,24 +159,20 @@ watch(menuOpen, (open) => {
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent
-        align="end"
-        :side-offset="8"
-        class="app-shell__no-drag min-w-52 rounded-2xl border-border/70 p-1.5 shadow-lg"
-      >
+      <DropdownMenuContent align="end" class="app-shell__no-drag w-auto min-w-0">
         <DropdownMenuRadioGroup v-model="themeMode">
           <DropdownMenuRadioItem
             v-for="option in themeOptions"
             :key="option.value"
             :value="option.value"
-            class="h-11 gap-3 rounded-xl pl-3 pr-4 text-[15px] font-medium text-foreground data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground"
+            class="pl-2"
           >
             <template #indicator-icon>
               <span aria-hidden="true" class="size-0" />
             </template>
             <component
               :is="option.icon"
-              class="size-5 shrink-0 text-muted-foreground transition-colors"
+              class="shrink-0 text-muted-foreground transition-colors"
               :class="themeMode === option.value && 'text-foreground'"
             />
             <span class="truncate">{{ option.label }}</span>
